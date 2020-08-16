@@ -32,7 +32,7 @@ const { rejects } = require('assert');
             }
         })
         .then(sended=true)
-        .catch(err => sender=false);
+        .catch(err => sended=false);
     }
     
     function email(email_addr, subject, message) {
