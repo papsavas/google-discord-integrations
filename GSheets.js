@@ -6,8 +6,8 @@ const gapi = require('gapi');
 const { Console } = require('console');
 const { EOF } = require('dns');
 const gauth = require('./GAuth');
-const google_ids = require('../resps/google ids.json');
-const discIDs = require('../resps/discord ids.json');
+const google_ids = require('../reps/google ids.json');
+const discIDs = require('../reps/discord ids.json');
 const SCOPES = [
   'https://www.googleapis.com/auth/drive',
   'https://spreadsheets.google.com/feeds',
@@ -17,57 +17,81 @@ const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets.readonly'
 ];
 
-const TOKEN_PATH = 'tokens/token_sheets.json';
+const TOKEN_PATH = '../tokens/token_sheets.json';
 
-const CREDENTIALS_PATH = 'credentials/credentials_sheets.json';
+const CREDENTIALS_PATH = '../credentials/credentials_sheets.json';
 
-var w_bool;
+var write_flag;
 var contents;
-var amID;
+var am2ID;
 var client;
-var IDMembers;
+var mID2member;
+var am;
+var id;
+var name;
 
-function list(inc_w_bool, inc_contents, inc_amID, inc_client,inc_IDMembers){  
+async function MembersData(inc_w_bool, inc_contents, inc_amID, inc_client,inc_IDMembers){  
     write_flag=inc_w_bool;
     contents=inc_contents;
-    amID=inc_amID;
+    am=contents[0];
+    id=contents[1];
+    name=contents[2];
+    am2ID=inc_amID;
     client=inc_client;
-    IDMembers=inc_IDMembers;
-    gauth.authorization(SCOPES,TOKEN_PATH,CREDENTIALS_PATH,loadMembers);
+    mID2member=inc_IDMembers;
+    let auth = await gauth.authorization(SCOPES,TOKEN_PATH,CREDENTIALS_PATH);
+    let response;
+    if(write_flag){
+       response = await write2Sheet(auth);
+    }
+    else{
+       response = await loadMembers(auth);
+    }
+    
+    return new Promise((resolve, reject) => {
+      resolve(response);
+    });
 }
 
-
+//load members from sheets to local structures
 function loadMembers(auth) {
   const sheets = google.sheets({version: 'v4', auth});
-  sheets.spreadsheets.values.get({
-    spreadsheetId: google_ids.MembersDataSheet,
-    range: 'Members Data',
-  }, (err, res) => {
-    if (err) return console.log('The API returned an error: ' + err);
-    const rows = res.data.values;
-    if (rows.length) {
-      console.log('AM, ID, Name');
-      // Print columns A and E, which correspond to indices 0 and 4.
-      rows.map((row) => {
-        //console.log(row);
-        amID[row[0]]=`${row[1]}`;
-      //  console.log(`${row[0]}, ${row[1]}, ${row[2]}`);
-      });
-    } else {
-      console.log('No data found.');
-    }
-
-    for(let am in amID){
-      client.guilds.cache.get(discIDs.KEPguild).members.fetch(amID[am]).then(value=>IDMembers[amID[am]]=value);
-    }
-    console.log('idmembers:'+ IDMembers);
-    if(w_bool)
-        write2Sheet(auth, contents[0],contents[1],contents[2])
+  return new Promise((resolve, reject) => {
+    sheets.spreadsheets.values.get({
+      spreadsheetId: google_ids.MembersDataSheet,
+      range: 'Members Data',
+    }, (err, res) => {
+      if (err) return console.log('The API returned an error: ' + err);
+      const rows = res.data.values;
+      if (rows.length) {
+        rows.map((row) => {
+          //console.log(row);
+          am2ID[row[0]]=`${row[1]}`;
+          //console.log(`${row[0]}, ${row[1]}, ${row[2]}`);
+        });
+      } else {
+        console.log('No sheet data found.');
+      }
+  
+      for(let am in am2ID){
+         //fetch('id') returns <member>
+        client.guilds.cache.get(discIDs.KEPguild).members.fetch(am2ID[am])
+        .then(member=>mID2member[am2ID[am]]=member)
+        .catch(err=> {
+          if(am2ID[am].length>0){
+             /* this will be automated in the future  */
+            console.log(`\nMember not found while scanning docs. Be sure to remove it from "Members Data"\n ID: ${am2ID[am]}`);
+            client.channels.cache.get(discIDs.channels.papbot).send(`Remove Member with MemberID:${am2ID[am]}\n`);
+          }
+        }); 
+      }
+    });
+    resolve(mID2member);
   });
 }
 
 
-function write2Sheet(auth, am,id,name){
+function write2Sheet(auth){
   const sheets = google.sheets({version: 'v4', auth});
   let values = [
       [
@@ -78,7 +102,7 @@ function write2Sheet(auth, am,id,name){
     let resource = {
       values,
     };
-    sheets.spreadsheets.values.append({
+    return sheets.spreadsheets.values.append({
       spreadsheetId: google_ids.MembersDataSheet,
       range:"Members Data",
       valueInputOption:'RAW',
@@ -86,4 +110,4 @@ function write2Sheet(auth, am,id,name){
     });
 }
 
-exports.list = list;
+exports.MembersData = MembersData;

@@ -10,16 +10,20 @@ const gauth = require('./GAuth');
 
 var events;
 const SCOPES = ['https://www.googleapis.com/auth/calendar.readonly'];
-const TOKEN_PATH = 'tokens/token_calendar.json';
-const CREDENTIALS_PATH = 'credentials/credentials_calendar.json';
+const TOKEN_PATH = '../tokens/token_calendar.json';
+const CREDENTIALS_PATH = '../credentials/credentials_calendar.json';
 var Dmessage;
 
-function listEvents(message){
+async function listEvents(message){
     Dmessage = message;
-    gauth.authorization(SCOPES,TOKEN_PATH,CREDENTIALS_PATH,loadEvents);
+    let auth = await gauth.authorization(SCOPES,TOKEN_PATH,CREDENTIALS_PATH);
+    return new Promise(async (resolve, reject) => {
+        const response = await loadEvents(auth)
+        resolve(response);
+    });
 }
 
-function loadEvents(auth) {
+async function loadEvents(auth) {
     const calendar = google.calendar({version: 'v3', auth});
     calendar.events.list({
         calendarId: 'primary',
@@ -41,7 +45,7 @@ function loadEvents(auth) {
 }
 
 function sendEvents(events,receivedMessage){
-    console.log('Upcoming 100 events:');
+    console.log('loading 100 upcoming events:');
     events.map(async(event, i) => 
     {
         const start = event.start.dateTime || event.start.date;
@@ -55,7 +59,7 @@ function sendEvents(events,receivedMessage){
         
         let spaces=''
         for(let i=0; i<2.55*str.length;i++){
-            spaces+='\xa0';  //length of the horizontal line splitting events
+            spaces+='\xa0';
         }
         //spaces+='__';
         receivedMessage.channel.send(str+`\n__${spaces}__\n`);
